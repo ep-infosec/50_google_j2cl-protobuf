@@ -1,0 +1,58 @@
+// Copyright 2019 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// LINT: LEGACY_NAMES
+syntax = "proto2";
+
+package protobuf.contrib.immutablejs.protos;
+
+option java_package = "com.google.protobuf.contrib.immutablejs.protos";
+
+message Fields {
+  // Primitive field in different styles.
+
+  optional bool primitive_lower_case_underscore = 1;
+  optional bool primitiveLowerCaseCamel = 2;
+  optional bool PrimitiveUpperCaseCamel = 3;
+
+  repeated bool repeated_primitive_lower_case_underscore = 4;
+  repeated bool repeatedPrimitiveLowerCaseCamel = 5;
+  repeated bool RepeatedPrimitiveUpperCaseCamel = 6;
+
+  // Enum field in different styles.
+
+  enum TestEnum {
+    UNKNOWN = 0;
+    BLUE = 1;
+    RED = 2;
+  }
+  optional TestEnum enum_lower_case_underscore = 7;
+  optional TestEnum enumLowerCaseCamel = 8;
+  optional TestEnum EnumUpperCaseCamel = 9;
+
+  repeated TestEnum repeated_enum_lower_case_underscore = 10;
+  repeated TestEnum repeatedEnumLowerCaseCamel = 11;
+  repeated TestEnum RepeatedEnumUpperCaseCamel = 12;
+
+  // Message field in different styles.
+
+  message Nested {}
+  optional Nested message_lower_case_underscore = 13;
+  optional Nested messageLowerCaseCamel = 14;
+  optional Nested MessageUpperCaseCamel = 15;
+
+  repeated Nested repeated_message_lower_case_underscore = 16;
+  repeated Nested repeatedMessageLowerCaseCamel = 17;
+  repeated Nested RepeatedMessageUpperCaseCamel = 18;
+}

@@ -1,0 +1,623 @@
+// Copyright 2019 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+goog.module('proto.im.JspbKernel');
+
+const Equivalence = goog.require('proto.im.internal.Equivalence');
+const FieldAccessor = goog.require('proto.im.internal.FieldAccessor');
+const InternalList = goog.require('proto.im.internal.InternalList');
+const InternalMutableListView = goog.require('proto.im.internal.InternalMutableListView');
+const InternalMutableMapView = goog.require('proto.im.internal.InternalMutableMapView');
+const Hashing = goog.require('proto.im.internal.Hashing');
+const InternalMap = goog.require('proto.im.internal.InternalMap');
+const ListView = goog.require('proto.im.ListView');
+const MapView = goog.require('proto.im.MapView');
+const internalChecks = goog.require('proto.im.internal.internalChecks');
+const {assert} = goog.require('goog.asserts');
+const {isFixGroupsB171736612Enabled, FIXED_GROUP_FLAG} = goog.require('proto.im.defines');
+
+#parse('imports.vm')
+
+## A dollar-sign literal to be used in places where on would want to escape it.
+## Unfortunately VTL only allows backslash escaping of valid VTL references. To
+## escape something that looks like a VTL variable reference but isn't defined
+## you need to used a dummy variable. See:
+## https://velocity.apache.org/engine/1.7/user-guide.html#escaping-invalid-vtl-references
+#set( $D = '$' )
+
+/** @private @const */
+const cachedMsgKey = '${D}jspb_cached_msg_';
+
+/** @private @const */
+const cachedListKey = '${D}jspb_cached_list_';
+
+/** @private @const */
+const cachedMapKey = '${D}jspb_cached_map_';
+
+/**
+ * @param {!Array} data
+ * @return {boolean}
+ */
+function hasExtensionObject(data) {
+  if (data.length > 0) {
+    // Look at the data to see if there is a extension object
+    const lastObject = data[data.length - 1];
+    // The `typeof` operator here is not necessary for correctness but is
+    // important for performance since it prevents us querying constructors of
+    // things like string/number/boolean.
+    if (lastObject && typeof lastObject === "object" &&
+        !Array.isArray(lastObject) &&
+        lastObject.constructor === Object) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * @param {!Array} data
+ * @return {boolean}
+ */
+function hasGroupFlag(data) {
+  return hasExtensionObject(data) && FIXED_GROUP_FLAG in data[data.length - 1];
+}
+
+/**
+* @param {!Object} obj
+* @return {boolean} Returns true if obj only contains flags (i.e. non-numeric
+*   keys). Returns false if obj is empty or has at least one numeric key.
+*/
+function sparseObjectOnlyContainsFlags(obj) {
+  const keys = Object.keys(obj);
+  return keys.length > 0 && keys.every(isNaN);
+}
+
+/**
+ * @param {!Array<*>} data
+ * @param {number} suggestedPivot possible pivot selection. Only used if data
+ *    does not have a sparse object (i.e. an implied pivot).
+ * @param {number} messageOffset
+ * @return {number} The field number after which fields are found in the
+ *     extension object.
+ */
+function calculatePivot(data, suggestedPivot, messageOffset) {
+  const lastIndex = data.length - 1;
+  if (hasExtensionObject(data)) {
+    // If msg's sparse object only contains flags, then we should pretend the
+    // sparse object doesn't exist for the sake of pivot selection. Otherwise,
+    // the artificial sparse object may cause us to mistakenly choose a low
+    // pivot value and inefficiently store fields in it.
+    if (sparseObjectOnlyContainsFlags(/** @type {!Object} */ (data[lastIndex]))) {
+      return Number.MAX_VALUE;
+    } else {
+      // Reuse the existing pivot
+      return fieldNumberFromArrayIndex(lastIndex, messageOffset);
+    }
+  }
+
+  if (suggestedPivot > 0) {
+    return Math.max(suggestedPivot, fieldNumberFromArrayIndex(lastIndex + 1, messageOffset));
+  }
+
+  return Number.MAX_VALUE;
+}
+
+/**
+ * @param {!Object<number, ?>} data
+ */
+function cloneRepeatedFields_(data) {
+  for (const key in data) {
+    const value = data[+key];
+    if (Array.isArray(value) && !(cachedMsgKey in value)) {
+      // Note that for submessages that are not instantiated, there might not
+      // a cached msg (e.g. a parsed Message where getter is not called yet).
+      // Those are OK to copy since we don't care about referential equality
+      // if the message is not instantiated yet.
+      data[+key] = value.slice();
+    }
+  }
+}
+
+/**
+ * @final
+ */
+class JspbKernel {
+  /**
+   * @param {!Array<*>} data The array holding protobuf data conforming to the
+   *     JSPB wireformat.
+   * @param {number} suggestedPivot The suggested field number after which
+   *     fields are placed in the extension object.
+   * @param {string|number} messageId The apps framework message id.
+   * @return {!JspbKernel}
+   */
+  static createMessage(data, suggestedPivot, messageId) {
+    const messageOffset = messageId ? 0 : -1;
+    const pivot = calculatePivot(data, suggestedPivot, messageOffset);
+    // Assign message id if its not present
+    if (messageId && !data[0]) {
+      data[0] = messageId;
+    }
+
+    if (hasGroupFlag(data)) {
+      throw new Error(
+          `Unexpected "g" flag in sparse object of message that is not a group type.`);
+    }
+
+    return new JspbKernel(data, pivot, messageOffset,
+      /* isFixedGroup = */ false);
+  }
+
+  /**
+   * @param {!Array<*>} data The array holding protobuf data conforming to the
+   *     JSPB wireformat.
+   * @param {number} suggestedPivot The pivot value after which fields are found
+   *     in the extension object.
+   * @param {number} groupFieldNumber The field number of the group field this
+   *     message represents, or zero if it's not a group.
+   * @return {!JspbKernel}
+   */
+  static createGroup(data, suggestedPivot, groupFieldNumber) {
+    // Group fields do not support a message ID offset. Groups fixing
+    // b/171736612 will have a pivot and sparse object that contains an
+    // indicator flag. All other groups will not have a pivot.
+    let groupOffset = groupFieldNumber > 0 ? groupFieldNumber : 0;
+
+    // TODO(b/240186489): Groups should use the same suggested pivot calculation
+    // as other messages.
+    const isFixedGroup = hasGroupFlag(data);
+    if (isFixedGroup) {
+      groupOffset = 0;
+      suggestedPivot = data.length - 1;
+    }
+
+    const messageOffset = -1 - groupOffset;
+    const pivot = calculatePivot(data, suggestedPivot, messageOffset);
+
+    return new JspbKernel(
+        data,
+        pivot,
+        messageOffset,
+        isFixedGroup);
+  }
+
+  /**
+   * @param {function(new:MESSAGE, !Array<*>)} ctor
+   * @param {!Array<?>} data
+   * @return {MESSAGE}
+   * @template MESSAGE
+   */
+  static fromArray(ctor, data) {
+    return JspbKernel.getOrCache_(data, cachedMsgKey, () => new ctor(data));
+  }
+
+  /**
+   * @param {!Array<*>} data The array holding protobuf data conforming to the
+   *     JSPB wireformat.
+   * @param {number} pivot The field number after which fields are placed in the
+   *     extension object.
+   * @param {number} messageOffset The apps framework message id.
+   * @param {boolean} isFixedGroup Indicates that this message is a fixed group.
+   * @private
+   */
+  constructor(data, pivot, messageOffset, isFixedGroup) {
+    /** @private @const {!Array<*>} */
+    this.data_ = data;
+    /** @private {number} */
+    this.pivot_ = pivot;
+    /** @private @const {number} */
+    this.messageOffset_ = messageOffset;
+    /** @type {boolean} */
+    this.isFixedGroup = isFixedGroup;
+    /** @private */
+    this.hash_ = 0;
+  }
+
+  /**
+   * Returns a shallow copied new message.
+   * @param {function(new:MESSAGE, !Array<*>)} ctor
+   * @return {MESSAGE}
+   * @template MESSAGE
+   */
+  shallowCopy(ctor) {
+    const newData = this.data_.slice();
+    // Note that we only need to clone the repeated fields since submessages are
+    // not modifiable with the builder.
+    cloneRepeatedFields_(newData);
+
+    // Last field in the array might be an extension object
+    // For extenions we need to clone the object itself and its repeated fields.
+    if (hasExtensionObject(newData)) {
+      const clonedExtension =
+          Object.assign({}, /** @type {!Object} */ (newData.pop()));
+      cloneRepeatedFields_(clonedExtension);
+
+      if (this.isFixedGroup) {
+        // If cloning a fixed group, its sparse object will not contain the
+        // fix marker because we previously removed it to simplify internal_add$
+        // handling. Add it back now so we can call fromArray, which expects
+        // the serialized representation rather than our internal one.
+        //
+        // Note: This scenario is exceedingly rare because groups generally
+        // do not extensions and therefore no sparse object.
+        clonedExtension[FIXED_GROUP_FLAG] = 1;
+      }
+
+      newData.push(clonedExtension);
+    } else if (this.isFixedGroup) {
+      // If cloning a fixed group, its sparse object will not contain the
+      // fix marker because we previously removed it to simplify internal_add$
+      // handling. Add it back now so we can call fromArray, which expects
+      // the serialized representation rather than our internal one.
+      newData.push({[FIXED_GROUP_FLAG]: 1});
+    }
+
+    return JspbKernel.fromArray(ctor, newData);
+  }
+
+  /**
+   * Adds a fixed group indicator flag to the sparse object. If the group does
+   * not already have a sparse object, one will be added and the pivot set
+   * accordingly.
+   */
+  addGroupFlag() {
+    if (hasExtensionObject(this.data_)) {
+      this.data_[this.data_.length - 1][FIXED_GROUP_FLAG] = 1;
+    } else {
+      this.data_.push({[FIXED_GROUP_FLAG]:1});
+      this.pivot_ = this.data_.length - 1;
+    }
+  }
+
+  /**
+   * Remove the fixed group indicator flag from the sparse object.
+   * If the sparse object becomes empty, removes it as well.
+   */
+  removeGroupFlag() {
+    const sparseObj = /** @type {!Object} */ (this.data_[this.data_.length - 1]);
+    delete sparseObj[FIXED_GROUP_FLAG];
+    if (Object.keys(sparseObj).length === 0) {
+      this.data_.pop();
+
+      if (this.pivot_ !== Number.MAX_VALUE) {
+        this.pivot_ = this.data_.length - 1;
+      }
+    }
+  }
+
+  /**
+   * @return {string}
+   */
+  serialize() {
+    return JSON.stringify(this.data_, FieldAccessor.serializeSpecialValues);
+  }
+
+  /**
+   * @param {!JspbKernel} other
+   * @return {boolean}
+   */
+  equals(other) {
+    if (this === other) {
+      return true;
+    }
+
+    return Equivalence.equivalence(this.data_, other.data_);
+  }
+
+  /**
+   * @return {number}
+   */
+  hashCode() {
+    if (this.hash_ === 0) {
+      this.hash_ = Hashing.hash(this.data_);
+    }
+    return this.hash_;
+  }
+
+  /**
+   * Returns the appropriate index for the storage type based on the field
+   * number.
+   * @param {number} fieldNumber The field number.
+   * @return {number}
+   * @private
+   */
+  indexForStorage_(fieldNumber) {
+    if (fieldNumber < this.pivot_) {
+      return arrayIndexFromFieldNumber(fieldNumber, this.messageOffset_);
+    } else {
+      return fieldNumber;
+    }
+  }
+
+  /**
+   * Selects either the data object or the extension object based on the
+   * field number.
+   * @param {number} fieldNumber
+   * @return {!Object<number, *>}
+   * @private
+   */
+  getStorageFor_(fieldNumber) {
+    if (fieldNumber < this.pivot_) {
+      return this.data_;
+    } else {
+      const extensionObjectIndex = arrayIndexFromFieldNumber(this.pivot_, this.messageOffset_);
+      let extension = this.data_[extensionObjectIndex];
+      if (!extension) {
+        extension = this.data_[extensionObjectIndex] = {};
+      }
+      return /** @type {!Object<number, *>} */ (extension);
+    }
+  }
+
+  /**
+   * Returns a cached value for a field and key, or creates and caches the
+   * value.
+   * @param {!Object} cacheObj
+   * @param {string} cacheKey
+   * @param {function():T} factoryFn
+   * @return {T}
+   * @template T
+   * @private
+   */
+  static getOrCache_(cacheObj, cacheKey, factoryFn) {
+    let cached = cacheObj[cacheKey];
+    if (!cached) {
+      cached = factoryFn();
+      if (!Object.isFrozen(cacheObj)) {
+        cacheObj[cacheKey] = cached;
+      }
+    }
+    return cached;
+  }
+
+  /**
+   * @param {number} fieldNumber The field number.
+   * @return {string}
+   */
+  typeofValue(fieldNumber) {
+    const rawJson = this.getStorageFor_(fieldNumber);
+    return typeof rawJson[this.indexForStorage_(fieldNumber)];
+  }
+
+  /**
+   * @param {number} fieldNumber
+   * @return {boolean}
+   */
+  hasField(fieldNumber) {
+    const rawJson = this.getStorageFor_(fieldNumber);
+    return FieldAccessor.hasField(rawJson, this.indexForStorage_(fieldNumber));
+  }
+
+  /**
+   * @param {number} fieldNumber
+   * @return {number}
+   */
+  getRepeatedFieldCount(fieldNumber) {
+    return this.hasField(fieldNumber) ? this.getInternalList_(fieldNumber).size() : 0;
+  }
+
+  /**
+   * @param {number} fieldNumber
+   */
+  clearField(fieldNumber) {
+    const rawJson = this.getStorageFor_(fieldNumber);
+    delete rawJson[this.indexForStorage_(fieldNumber)];
+  }
+
+
+  /**
+   * @param {number} fieldNumber
+   * @param {function(!Object<number, *>, number):T} accessorFn
+   * @private
+   * @return {T}
+   * @template T
+   */
+  getField_(fieldNumber, accessorFn) {
+    const rawJson = this.getStorageFor_(fieldNumber);
+    return accessorFn(rawJson, this.indexForStorage_(fieldNumber));
+  }
+
+  /**
+   * @param {number} fieldNumber
+   * @param {T} defaultValue
+   * @param {function(!Object<number, *>, number, T):T} accessorFn
+   * @private
+   * @return {T}
+   * @template T
+   */
+  getFieldWithDefault_(fieldNumber, defaultValue, accessorFn) {
+    const rawJson = this.getStorageFor_(fieldNumber);
+    return accessorFn(rawJson, this.indexForStorage_(fieldNumber), defaultValue);
+  }
+
+  /**
+   * @param {number} fieldNumber
+   * @param {T} value
+   * @param {function(!Object<number, *>, number, T)} accessorFn
+   * @private
+   * @template T
+   */
+  setField_(fieldNumber, value, accessorFn) {
+    const rawJson = this.getStorageFor_(fieldNumber);
+    accessorFn(rawJson, this.indexForStorage_(fieldNumber), value);
+  }
+
+  /**
+   * @param {number} fieldNumber
+   * @param {T} value
+   * @param {function(T)} defaultValueCheckFn
+   * @param {function(!Object<number, *>, number, T)} accessorFn
+   * @private
+   * @template T
+   */
+  setFieldIgnoreDefaultProto3(fieldNumber, value, defaultValueCheckFn, accessorFn) {
+    if (defaultValueCheckFn(value)) {
+      this.clearField(fieldNumber);
+    } else {
+      this.setField_(fieldNumber, value, accessorFn)
+    }
+  }
+
+  /**
+   * @param {number} fieldNumber
+   * @return {!Array<*>}
+   * @private
+   */
+  getInternalRepeatedField_(fieldNumber) {
+    const rawJson = this.getStorageFor_(fieldNumber);
+    const index = this.indexForStorage_(fieldNumber);
+    return FieldAccessor.ensureRepeatedFieldPresent(rawJson, index);
+  }
+
+  /**
+   * @param {number} fieldNumber
+   * @return {!Array<*>}
+   * @private
+   */
+  getInternalMapField_(fieldNumber) {
+    const rawJson = this.getStorageFor_(fieldNumber);
+    const index = this.indexForStorage_(fieldNumber);
+    return FieldAccessor.ensureMapFieldPresent(rawJson, index);
+  }
+
+  /**
+   * @param {number} fieldNumber
+   * @return {!InternalList<T>}
+   * @private
+   * @template T
+   */
+  getInternalList_(fieldNumber) {
+    const field = this.getInternalRepeatedField_(fieldNumber);
+    return /** @type {!InternalList<T>} */ (
+        JspbKernel.getOrCache_(field, cachedListKey,
+            () => new InternalList(internalChecks.checkTypeArray(field))));
+  }
+
+  /**
+   * @param {number} fieldNumber
+   * @param {function(!Object<number, *>, number):T} accessorFn
+   * @return {!ListView<T>}
+   * @private
+   * @template T
+   */
+  getListView_(fieldNumber, accessorFn) {
+    if (!this.hasField(fieldNumber)) {
+      return /** @type {!ListView<T>} */ (ListView.empty());
+    }
+    const list = this.getInternalList_(fieldNumber);
+    list.setAccessor(accessorFn);
+    return list;
+  }
+
+  /**
+   * @param {number} fieldNumber
+   * @param {function(!Object<number, *>, number, T)} setterFn
+   * @return {!InternalMutableListView<T>}
+   * @private
+   * @template T
+   */
+  getMutableListView_(fieldNumber, setterFn) {
+    const list = this.getInternalList_(fieldNumber);
+    list.setSetter(setterFn);
+    return list;
+  }
+
+  /**
+   * @param {number} fieldNumber
+   * @param {function(!Object<number, *>, number): KEY} keyAccessorFn
+   * @param {function(!Object<number, *>, number, KEY): void} keySetterFn
+   * @param {function(!Object<number, *>, number): VALUE} valueAccessorFn
+   * @param {function(!Object<number, *>, number, VALUE): void} valueSetterFn
+   * @return {!InternalMap<KEY, VALUE>}
+   * @private
+   * @template KEY, VALUE
+   */
+  getInternalMap_(
+      fieldNumber, keyAccessorFn, keySetterFn, valueAccessorFn, valueSetterFn) {
+    const field = this.getInternalMapField_(fieldNumber);
+    const map = JspbKernel.getOrCache_(field, cachedMapKey,
+        () => new InternalMap(
+            internalChecks.checkTypeArray(field), keyAccessorFn, keySetterFn,
+            valueAccessorFn, valueSetterFn));
+    return /** @type {!InternalMap<KEY, VALUE>} */ (map);
+  }
+
+  /**
+   * @param {number} fieldNumber
+   * @param {function(!Object<number, *>, number): KEY} keyAccessorFn
+   * @param {function(!Object<number, *>, number, KEY): void} keySetterFn
+   * @param {function(!Object<number, *>, number): VALUE} valueAccessorFn
+   * @param {function(!Object<number, *>, number, VALUE): void} valueSetterFn
+   * @return {!MapView<KEY, VALUE>}
+   * @private
+   * @template KEY, VALUE
+   */
+  getMapView_(
+      fieldNumber, keyAccessorFn, keySetterFn, valueAccessorFn, valueSetterFn) {
+    if (!this.hasField(fieldNumber)) {
+      return /** @type {!MapView<KEY, VALUE>} */ (MapView.empty());
+    }
+    return this.getInternalMap_(
+        fieldNumber, keyAccessorFn, keySetterFn, valueAccessorFn,
+        valueSetterFn);
+  }
+
+  /**
+   * @param {number} fieldNumber
+   * @param {function(!Object<number, *>, number): KEY} keyAccessorFn
+   * @param {function(!Object<number, *>, number, KEY): void} keySetterFn
+   * @param {function(!Object<number, *>, number): VALUE} valueAccessorFn
+   * @param {function(!Object<number, *>, number, VALUE): void} valueSetterFn
+   * @return {!InternalMutableMapView<KEY, VALUE>}
+   * @private
+   * @template KEY, VALUE
+   */
+  getMutableMapView_(
+      fieldNumber, keyAccessorFn, keySetterFn, valueAccessorFn, valueSetterFn) {
+    const map = this.getInternalMap_(
+        fieldNumber, keyAccessorFn, keySetterFn, valueAccessorFn,
+        valueSetterFn);
+    return map;
+  }
+
+  #parse('jspb_kernel_accessors.vm')
+}
+
+/**
+ * @param {!Object<number, *>} dataToUpdate
+ * @param {number} fieldNumber
+ * @param {!JspbKernel} value
+ */
+function messageFieldWriter(dataToUpdate, fieldNumber, value) {
+  dataToUpdate[fieldNumber] = value.data_;
+}
+
+/**
+ * @param {number} fieldNumber
+ * @param {number} messageOffset
+ * @return {number}
+ */
+function arrayIndexFromFieldNumber(fieldNumber, messageOffset) {
+  return fieldNumber + messageOffset;
+}
+
+/**
+ * @param {number} arrayIndex
+ * @param {number} messageOffset
+ * @return {number}
+ */
+function fieldNumberFromArrayIndex(arrayIndex, messageOffset) {
+  return arrayIndex - messageOffset;
+}
+
+exports = JspbKernel;
+

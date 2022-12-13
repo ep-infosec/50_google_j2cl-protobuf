@@ -1,0 +1,5 @@
+#if (${field.hasHasser()})
+  @jsinterop.annotations.JsMethod(name = "has${field.jsName}")
+  public native boolean has${field.name}();
+#end
+#parse('getter.vm')

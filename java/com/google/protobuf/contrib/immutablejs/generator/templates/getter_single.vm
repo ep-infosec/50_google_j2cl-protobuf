@@ -1,0 +1,31 @@
+#set ($valueType = $field.jsDoc)
+#if ($field.hasHasser())
+  /**
+   * @return {boolean}
+#if ($field.isDeprecated())
+   * @deprecated
+#end
+   */
+  has${field.name}() {
+    return this.internal_hasField($field.number);
+  }
+#end
+
+  /**
+   * $!field.protoFileComments
+   * @return {${valueType}}
+#if ($field.isDeprecated())
+   * @deprecated
+#end
+   */
+  get${field.name}() {
+#if ($field.isMessage())
+    return this.internal_getMessageField($field.number, $field.type.cycleSafeExpression);
+#elseif ($field.isEnum())
+    return /** @type {${valueType}} */ (this.internal_getIntFieldWithDefault($field.number, $field.defaultValue));
+#elseif ($field.hasDefaultValue())
+    return this.internal_get${field.stem}FieldWithDefault($field.number, $field.defaultValue);
+#else
+    return this.internal_get${field.stem}Field($field.number);
+#end
+  }

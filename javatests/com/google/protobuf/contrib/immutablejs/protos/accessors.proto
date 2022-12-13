@@ -1,0 +1,129 @@
+// Copyright 2019 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Tests for fields accessors of different types.
+syntax = "proto2";
+
+package protobuf.contrib.immutablejs.protos;
+
+option java_multiple_files = true;
+
+message TestProto {
+  // bool fields.
+
+  optional bool optional_bool = 1;
+  optional bool optional_bool_with_default = 2 [default = true];
+  repeated bool repeated_bool = 3;
+
+  // int32 fields
+
+  optional int32 optional_int = 4;
+  optional int32 optional_int_with_default = 5 [default = 135];
+  repeated int32 repeated_int = 6;
+
+  // int64 fields
+
+  optional int64 optional_long = 7 [jstype = JS_STRING];
+  optional int64 optional_long_with_default = 8
+      [default = 3000000000, jstype = JS_STRING];
+  repeated int64 repeated_long = 9 [jstype = JS_STRING];
+
+  // int64 fields (int52)
+
+  optional int64 optional_int52long = 50 [jstype = JS_NUMBER];
+  optional int64 optional_int52long_with_default = 51
+      [default = 30000, jstype = JS_NUMBER];
+  repeated int64 repeated_int52long = 52 [jstype = JS_NUMBER];
+
+  // int64 fields (default)
+
+  optional int64 optional_default_long = 53;
+
+  // float fields
+
+  optional float optional_float = 10;
+  optional float optional_float_with_default = 11 [default = 1.35];
+  repeated float repeated_float = 12;
+
+  // double fields
+
+  optional double optional_double = 13;
+  optional double optional_double_with_default = 14 [default = 2.46];
+  repeated double repeated_double = 15;
+
+  // enum fields.
+
+  enum TestEnum {
+    UNKNOWN = 0;
+    ONE = 1;
+    TWO = 2;
+    THREE = 3;
+    FOUR = 4;
+    FIVE = 5;
+    SIX = 6;
+    SEVEN = 7;
+    EIGHT = 8;
+  }
+  optional TestEnum optional_enum = 16;
+  optional TestEnum optional_enum_with_default = 17 [default = THREE];
+  repeated TestEnum repeated_enum = 18;
+
+  // string fields.
+
+  optional string optional_string = 19;
+  optional string optional_string_with_default = 20
+      [default = "non-trivial default"];
+  repeated string repeated_string = 21;
+
+  // bytes fields.
+
+  optional bytes optional_bytes = 28;
+  optional bytes optional_bytes_with_default = 29 [default = "a bytey default"];
+  repeated bytes repeated_bytes = 30;
+
+  // unsigned fields.
+
+  optional uint32 optional_uint32 = 31;
+  optional uint64 optional_uint64 = 32 [jstype = JS_STRING];
+  optional uint64 optional_uint64_with_default = 38
+      [default = 9223372036854775810, jstype = JS_STRING];
+  repeated uint64 repeated_uint64 = 39 [jstype = JS_STRING];
+  optional uint32 optional_uint32_with_default = 33 [default = 4294967295];
+  repeated uint32 repeated_uint32 = 34;
+  optional fixed32 optional_fixed32 = 35;
+  optional fixed32 optional_fixed32_with_default = 36 [default = 4294967295];
+  repeated fixed32 repeated_fixed32 = 37;
+  optional fixed64 optional_fixed64 = 40 [jstype = JS_STRING];
+  optional fixed64 optional_fixed64_with_default = 41
+      [default = 9223372036854775810, jstype = JS_STRING];
+  repeated fixed64 repeated_fixed64 = 42 [jstype = JS_STRING];
+
+  // unsigned int52 fields
+  optional uint64 optional_uint52long = 43;
+  optional uint64 optional_uint52long_with_default = 44 [default = 30000];
+  repeated uint64 repeated_uint52long = 45;
+
+  // message fields.
+
+  message NestedMessage {
+    message DoublyNestedMessage {
+      optional string foo = 22;
+    }
+
+    optional string payload = 1;
+    optional DoublyNestedMessage errata = 2;
+  }
+  optional NestedMessage optional_message = 26;
+  repeated NestedMessage repeated_message = 27;
+}

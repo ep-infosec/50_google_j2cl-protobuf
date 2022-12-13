@@ -1,0 +1,717 @@
+// Copyright 2019 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+/*
+##########################################################
+#                                                        #
+#  __          __     _____  _   _ _____ _   _  _____    #
+#  \ \        / /\   |  __ \| \ | |_   _| \ | |/ ____|   #
+#   \ \  /\  / /  \  | |__) |  \| | | | |  \| | |  __    #
+#    \ \/  \/ / /\ \ |  _  /| . ` | | | | . ` | | |_ |   #
+#     \  /\  / ____ \| | \ \| |\  |_| |_| |\  | |__| |   #
+#      \/  \/_/    \_\_|  \_\_| \_|_____|_| \_|\_____|   #
+#                                                        #
+#                                                        #
+##########################################################
+# Do not use this class in your code. This class purely  #
+# exists to make proto code generation easier.           #
+# If you are looking for the public usable api please    #
+# look at proto.im.Message.                              #
+##########################################################
+ */
+goog.module('proto.im.internal.InternalMessage');
+
+const ByteString = goog.require('proto.im.ByteString');
+const JspbKernel = goog.require('proto.im.JspbKernel');
+const ListView = goog.require('proto.im.ListView');
+const Long = goog.require('goog.math.Long');
+const MapView = goog.require('proto.im.MapView');
+const Message = goog.require('proto.im.Message');
+const internalChecks = goog.require('proto.im.internal.internalChecks');
+const reflect = goog.require('goog.reflect');
+const {isFixGroupsB171736612Enabled, FIXED_GROUP_FLAG} = goog.require('proto.im.defines');
+
+#parse('imports.vm')
+
+/**
+ * Base class for all immutable proto messages.
+ * @abstract
+ * @template MESSAGE
+ * @template BUILDER
+ * @extends {Message<MESSAGE, BUILDER>}
+ */
+class InternalMessage extends Message {
+  /**
+   * @param {!Array<*>} data The array holding protobuf data conforming to the
+   *     JSPB wireformat.
+   * @param {number} suggestedPivot The pivot value after which fields are found
+   *     in the extension object.
+   * @param {string|number} messageId The apps framework message id.
+   * @param {number=} groupFieldNumber The field number of the group field this
+   *     message represents, or zero if it's not a group.
+   * @protected
+   */
+  constructor(data, suggestedPivot, messageId, groupFieldNumber = 0) {
+    super();
+    /** @private @const {!JspbKernel} */
+    this.kernel_ = groupFieldNumber > 0 ?
+        JspbKernel.createGroup(data, suggestedPivot, groupFieldNumber) :
+        JspbKernel.createMessage(data, suggestedPivot, messageId);
+  }
+
+  /**
+   * @param {function(new:MESSAGE, !Array<*>)} ctor
+   * @param {!Array<?>} data
+   * @return {MESSAGE}
+   * @private
+   * @template MESSAGE
+   */
+  static fromArray(ctor, data) {
+    return JspbKernel.fromArray(ctor, data);
+  }
+
+  /**
+   * @param {function(new:MESSAGE, !Array<*>)} ctor
+   * @param {string} json
+   * @return {MESSAGE}
+   * @template MESSAGE
+   * @protected
+   */
+  static parseBase(ctor, json) {
+    const parsedProto = JSON.parse(json);
+    return InternalMessage.fromArray(
+        ctor, internalChecks.checkTypeArray(parsedProto));
+  }
+
+  /**
+   * Gets the default message instance for the given module name.
+   *
+   * @param {function(new:MESSAGE, !Array<*>)} ctor
+   * @return {!MESSAGE}
+   * @template MESSAGE
+   * @protected
+   */
+  static getDefaultInstanceForMessage(ctor) {
+    return reflect.cache(
+        DEFAULT_INSTANCES, /* key= */ undefined,
+        () => {
+          const initialMsg =
+          (/** @type{{internalDoNotUseIsGroup:(boolean|undefined)}} */
+            (ctor).internalDoNotUseIsGroup || false) &&
+              isFixGroupsB171736612Enabled() ? [{[FIXED_GROUP_FLAG] : 1}] : [];
+          return InternalMessage.fromArray(ctor, initialMsg);
+        },
+        () => goog.getUid(ctor));
+  }
+
+  /**
+   * @return {function(new:MESSAGE, !Array<*>)}
+   * @private
+   */
+  getConstructor_() {
+    return /** @type {function(new:MESSAGE, !Array<*>)} */ (this.constructor);
+  }
+
+  /**
+   * @return {function(string):MESSAGE}
+   * @final
+   * @override
+   */
+  getParserForType() {
+    const ctor = this.getConstructor_();
+    return json => InternalMessage.parseBase(ctor, json);
+  }
+
+  /**
+   * Gets the default message instance for the given module name.
+   *
+   * @return {!MESSAGE}
+   * @template MESSAGE
+   * @final
+   * @override
+   */
+  getDefaultInstanceForType() {
+    const ctor = this.getConstructor_();
+    return InternalMessage.getDefaultInstanceForMessage(ctor);
+  }
+
+  /**
+   * @return {string}
+   * @final
+   * @override
+   */
+  serialize() {
+    return this.kernel_.serialize();
+  }
+
+  /**
+   * @param {*} other
+   * @return {boolean}
+   * @final
+   * @override
+   */
+  equals(other) {
+    if (this === other) {
+      return true;
+    }
+
+    if (!(other instanceof this.getConstructor_())) {
+      return false;
+    }
+
+    const otherMessage = /** @type{!InternalMessage} */ (other);
+    return this.kernel_.equals(otherMessage.kernel_);
+  }
+
+  /**
+   * @return {number}
+   * @final
+   * @override
+   */
+  hashCode() {
+    return this.kernel_.hashCode();
+  }
+
+  /**
+   * @param {!Message.ExtensionFieldInfo<MESSAGE, T>} extensionInfo
+   * @return {T}
+   * @template T
+   * @final
+   * @override
+   */
+  getExtension(extensionInfo) {
+    const accessor =
+        (/** @type {!InternalMessage.ExtensionFieldInfo<MESSAGE, T>} */ (
+             extensionInfo))
+            .getReadAccessor();
+    return accessor(this);
+  }
+
+  /**
+   * @param {!Message.ExtensionFieldInfo<MESSAGE, !ListView<T>>} extensionInfo
+   * @param {number} index
+   * @return {T}
+   * @template T
+   * @final
+   * @override
+   */
+  getExtensionAtIndex(extensionInfo, index) {
+    const accessor =
+        (/**
+            @type {!InternalMessage.ExtensionFieldInfo<MESSAGE, !ListView<T>>}
+              */
+         (extensionInfo))
+            .getIndexReadAccessor();
+    return accessor(this, index);
+  }
+
+  /**
+   * @param {!Message.ExtensionFieldInfo<MESSAGE, !ListView<T>>} extensionInfo
+   * @template T
+   * @return {number}
+   * @final
+   * @override
+   */
+  getExtensionCount(extensionInfo) {
+    return this.internal_getRepeatedFieldCount(
+        (/**
+            @type {!InternalMessage.ExtensionFieldInfo<MESSAGE, !ListView<T>>}
+              */
+         (extensionInfo))
+            .getFieldNumber());
+  }
+
+  /**
+   * @param {!Message.ExtensionFieldInfo<MESSAGE, T>} extensionInfo
+   * @template T
+   * @return {boolean}
+   * @final
+   * @override
+   */
+  hasExtension(extensionInfo) {
+    return this.internal_hasField(
+        (/** @type {!InternalMessage.ExtensionFieldInfo<MESSAGE, T>} */ (
+             extensionInfo))
+            .getFieldNumber());
+  }
+
+  /**
+   * Returns a shallow copied new message.
+   * @return {MESSAGE}
+   * @private
+   */
+  shallowCopy_() {
+    return this.kernel_.shallowCopy(this.getConstructor_());
+  }
+
+  /**
+   * Returns the type of the value present at the given field number
+   * @param {number} fieldNumber The field number.
+   * @return {string}
+   * @protected
+   */
+  internal_typeofValue(fieldNumber) {
+    return this.kernel_.typeofValue(fieldNumber);
+  }
+
+  /**
+   * @param {number} fieldNumber
+   * @return {boolean}
+   * @protected
+   */
+  internal_hasField(fieldNumber) {
+    return this.kernel_.hasField(fieldNumber);
+  }
+
+  /**
+   * @param {number} fieldNumber
+   * @return {number}
+   * @protected
+   */
+  internal_getRepeatedFieldCount(fieldNumber) {
+    return this.kernel_.getRepeatedFieldCount(fieldNumber);
+  }
+
+#parse('internal_message_accessors.vm')
+}
+
+
+/**
+ * Base class for all immutable proto builders.
+ * @abstract
+ * @template MESSAGE
+ * @template BUILDER
+ * @extends {Message.Builder<MESSAGE, BUILDER>}
+ * @suppress {checkPrototypalTypes} TODO(b/113171732): Remove suppression.
+ */
+InternalMessage.Builder = class extends Message.Builder {
+  /**
+   * @param {MESSAGE} originalMessage the message that this builder will be
+   *     initially populated with.
+   * @protected
+   */
+  constructor(originalMessage) {
+    super();
+    /** @protected @const {MESSAGE} */
+    this.internal_message = originalMessage.shallowCopy_();
+    /** @private @const {!JspbKernel} */
+    this.kernel_ = this.internal_message.kernel_;
+    if (this.kernel_.isFixedGroup) {
+      // Remove the fix indicator flag (and the sparse object if it becomes
+      // empty, which is likely) so that we don't need to consider it during
+      // mutations. The fix group flag and its containing sparse object are
+      // temporary encoding detail that we don't want to interfere with the
+      // normal runtime invariants (particularly pivot handling).
+      this.kernel_.removeGroupFlag();
+    }
+  }
+
+  /**
+   * @return {MESSAGE}
+   * @final
+   * @override
+   */
+  build() {
+    // Clone the message so further modifications in builder doesn't reflect.
+    const copy = this.internal_message.shallowCopy_();
+    if (this.kernel_.isFixedGroup) {
+      // We are handing off a fixed group and need to (re-)attach a fix
+      // indicator flag in case of serialization. If this group is later
+      // provided/converted to a builder, we'll (re-)remove the fix flag then.
+      copy.kernel_.isFixedGroup = true;
+      copy.kernel_.addGroupFlag();
+    }
+    return copy;
+  }
+
+  /**
+   * @return {BUILDER} A copy of this builder.
+   * @final
+   * @override
+   */
+  clone() {
+    // TODO(b/114300224): Remove this cast. As an instance of an abstact class,
+    // the compiler can't determines that `this.constructor` must be a concrete
+    // class. It therefore warns about abstract class instantiation. This cast
+    // suppresses the warning.
+    const ctor = /** @type {function(new:BUILDER, ...?)} */ (this.constructor);
+    return new ctor(this.internal_message);
+  }
+
+
+  /**
+   * @param {!Message.ExtensionFieldInfo<MESSAGE, !ListView<T>>} extensionInfo
+   * @param {T} value
+   * @return {BUILDER}
+   * @template T
+   * @final
+   * @override
+   */
+  addExtension(extensionInfo, value) {
+    const accessor =
+        (/**
+            @type {!InternalMessage.ExtensionFieldInfo<MESSAGE, !ListView<T>>}
+              */
+         (extensionInfo))
+            .getAddAccessor();
+    accessor(this, value);
+    return this;
+  }
+
+  /**
+   * @param {!Message.ExtensionFieldInfo<MESSAGE, T>} extensionInfo
+   * @return {BUILDER}
+   * @template T
+   * @final
+   * @override
+   */
+  clearExtension(extensionInfo) {
+    return this.internal_clearField(
+        (/** @type {!InternalMessage.ExtensionFieldInfo<MESSAGE, T>} */ (
+             extensionInfo))
+            .getFieldNumber());
+  }
+
+  /**
+   * @param {!Message.ExtensionFieldInfo<MESSAGE, T>} extensionInfo
+   * @return {T}
+   * @template T
+   * @final
+   * @override
+   */
+  getExtension(extensionInfo) {
+    return this.internal_message.getExtension(extensionInfo);
+  }
+
+  /**
+   * @param {!Message.ExtensionFieldInfo<MESSAGE, !ListView<T>>} extensionInfo
+   * @param {number} index
+   * @return {T}
+   * @template T
+   * @final
+   * @override
+   */
+  getExtensionAtIndex(extensionInfo, index) {
+    return this.internal_message.getExtensionAtIndex(extensionInfo, index);
+  }
+
+  /**
+   * @param {!Message.ExtensionFieldInfo<MESSAGE, !ListView<T>>} extensionInfo
+   * @template T
+   * @return {number}
+   * @final
+   * @override
+   */
+  getExtensionCount(extensionInfo) {
+    return this.internal_message.getExtensionCount(extensionInfo);
+  }
+
+  /**
+   * @param {!Message.ExtensionFieldInfo<MESSAGE, T>} extensionInfo
+   * @template T
+   * @return {boolean}
+   * @final
+   * @override
+   */
+  hasExtension(extensionInfo) {
+    return this.internal_message.hasExtension(extensionInfo);
+  }
+
+  /**
+   * @param {!Message.ExtensionFieldInfo<MESSAGE, T>} extensionInfo
+   * @param {T} value
+   * @return {BUILDER}
+   * @template T
+   * @final
+   * @override
+   */
+  setExtension(extensionInfo, value) {
+    const accessor =
+        (/** @type {!InternalMessage.ExtensionFieldInfo<MESSAGE, T>} */ (
+             extensionInfo))
+            .getWriteAccessor();
+    accessor(this, value);
+    return this;
+  }
+
+  /**
+   * @param {!Message.ExtensionFieldInfo<MESSAGE, !ListView<T>>} extensionInfo
+   * @param {number} index
+   * @param {T} value
+   * @return {BUILDER}
+   * @template T
+   * @final
+   * @override
+   */
+  setExtensionAtIndex(extensionInfo, index, value) {
+    const accessor =
+        (/**
+            @type {!InternalMessage.ExtensionFieldInfo<MESSAGE, !ListView<T>>}
+              */
+         (extensionInfo))
+            .getIndexWriteAccessor();
+    accessor(this, index, value);
+    return this;
+  }
+
+  /**
+   * @param {number} fieldNumber
+   * @protected
+   * @return {BUILDER}
+   */
+  internal_clearField(fieldNumber) {
+    this.kernel_.clearField(fieldNumber);
+    return this;
+  }
+
+  /**
+   * @param {...number} fieldNumbers
+   * @protected
+   * @return {BUILDER}
+   */
+  internal_clearFields(...fieldNumbers) {
+    for (let i = 0; i < fieldNumbers.length; i++) {
+      this.internal_clearField(fieldNumbers[i]);
+    }
+    return this;
+  }
+
+#parse('internal_message_builder_accessors.vm')
+};
+
+
+/**
+ * @override
+ * @template TARGET_MESSAGE
+ * @template T
+ * @implements {Message.ExtensionFieldInfo<TARGET_MESSAGE, T>}
+ * @final
+ */
+InternalMessage.ExtensionFieldInfo = class {
+#foreach ($type in $primitiveTypes)
+#set ($valueType = $type.expression)
+#set ($stem = $type.target().stem)
+  /**
+   * Creates a single ${valueType} extension info object.
+   * @param {number} fieldNumber
+   * @return {!Message.ExtensionFieldInfo<?, E>}
+   * @template E
+   */
+  static createSingle${stem}Extension(fieldNumber) {
+    const getterFunction = message =>
+        message.internal_get${stem}Field(fieldNumber);
+    const setterFunction = (builder, value) =>
+        builder.internal_set${stem}Field(fieldNumber, value);
+    return new InternalMessage.ExtensionFieldInfo(
+        fieldNumber, getterFunction, setterFunction);
+  }
+
+  /**
+   * Creates a repeated ${valueType} extension info object.
+   * @param {number} fieldNumber
+   * @return {!Message.ExtensionFieldInfo<?, !ListView<E>>}
+   * @template E
+   */
+  static createRepeated${stem}Extension(fieldNumber) {
+    const getterFunction = message =>
+        message.internal_getRepeated${stem}Field(fieldNumber);
+    const setterFunction = (builder, value) =>
+        builder.internal_set${stem}Iterable(fieldNumber, value);
+    const getElementFunction = (message, elementIndex) =>
+        message.internal_get${stem}Element(fieldNumber, elementIndex);
+    const setElementFunction = (builder, elementIndex, value) =>
+        builder.internal_set${stem}Element(fieldNumber, elementIndex, value);
+    const addElementFunction = (builder, value) =>
+        builder.internal_add${stem}Element(fieldNumber, value);
+    return new InternalMessage.ExtensionFieldInfo(
+        fieldNumber, getterFunction, setterFunction, getElementFunction,
+        setElementFunction, addElementFunction);
+  }
+#end
+
+  /**
+   * Creates a single message extension info object.
+   * @param {number} fieldNumber
+   * @param {function(new:MESSAGE, !Array<?>)} ctor
+   * @return {!Message.ExtensionFieldInfo<?, !MESSAGE>}
+   * @template MESSAGE
+   */
+  static createSingleMessageExtension(fieldNumber, ctor) {
+    internalChecks.checkType(ctor != null);
+    const getterFunction = (message) =>
+        message.internal_getMessageField(fieldNumber, ctor);
+
+
+    const setterFunction = (builder, value) =>
+        builder.internal_setMessageField(fieldNumber, value);
+
+
+    return new InternalMessage.ExtensionFieldInfo(
+        fieldNumber, getterFunction, setterFunction);
+  }
+
+  /**
+   * Creates a repeated message extension info object.
+   * @param {number} fieldNumber
+   * @param {function(new:MESSAGE, !Array<?>)} ctor
+   * @return {!Message.ExtensionFieldInfo<?, !ListView<MESSAGE>>}
+   * @template MESSAGE
+   */
+  static createRepeatedMessageExtension(fieldNumber, ctor) {
+    internalChecks.checkType(ctor != null);
+    const getterFunction = (message) =>
+        message.internal_getRepeatedMessageField(fieldNumber, ctor);
+
+
+    const setterFunction = (builder, value) =>
+        builder.internal_setMessageIterable(fieldNumber, value);
+
+
+    const getElementFunction = (message, elementIndex) =>
+        message.internal_getMessageElement(fieldNumber, elementIndex, ctor);
+
+
+    const setElementFunction = (builder, elementIndex, value) =>
+        builder.internal_setMessageElement(fieldNumber, elementIndex, value);
+
+
+    const addElementFunction = (builder, value) =>
+        builder.internal_addMessageElement(fieldNumber, value);
+
+
+    return new InternalMessage.ExtensionFieldInfo(
+        fieldNumber, getterFunction, setterFunction, getElementFunction,
+        setElementFunction, addElementFunction);
+  }
+
+  /**
+   * @param {number} fieldNumber
+   * @param {function(!Message): T} readAccessor
+   * @param {function(!Message.Builder, T): *} writeAccessor
+   * @param {(function(!Message, number): ?)=}
+   *     indexReadAccessor
+   * @param {(function(!Message.Builder, number, ?): *)=}
+   *     indexWriteAccessor
+   * @param {(function(!Message.Builder, ?): *)=} addAccessor
+   * @private
+   */
+  constructor(
+      fieldNumber, readAccessor, writeAccessor, indexReadAccessor,
+      indexWriteAccessor, addAccessor) {
+    /** @const @private */
+    this.fieldNumber_ = fieldNumber;
+    /** @const @private */
+    this.readAccessor_ = readAccessor;
+    /** @const @private */
+    this.writeAccessor_ = writeAccessor;
+    /** @const @private */
+    this.indexReadAccessor_ = indexReadAccessor || null;
+    /** @const @private */
+    this.indexWriteAccessor_ = indexWriteAccessor || null;
+    /** @const @private */
+    this.addAccessor_ = addAccessor || null;
+  }
+
+  /**
+   * @return {number}
+   * @package
+   */
+  getFieldNumber() {
+    return this.fieldNumber_;
+  }
+
+  /**
+   * @return {function(!Message): !T}
+   * @package
+   */
+  getReadAccessor() {
+    return this.readAccessor_;
+  }
+
+  /**
+   * @return {function(!Message.Builder, !T): *}
+   * @package
+   */
+  getWriteAccessor() {
+    return this.writeAccessor_;
+  }
+
+  /**
+   * @return {?(function(!Message, number): ?)}
+   * @package
+   */
+  getIndexReadAccessor() {
+    return this.indexReadAccessor_;
+  }
+
+  /**
+   * @return {?(function(!Message.Builder, number, ?): *)}
+   * @package
+   */
+  getIndexWriteAccessor() {
+    return this.indexWriteAccessor_;
+  }
+
+  /**
+   * @return {?(function(!Message.Builder, ?): *)}
+   * @package
+   */
+  getAddAccessor() {
+    return this.addAccessor_;
+  }
+};
+
+/**
+ * @param {!MapView<KEY, VALUE>} mapView
+ * @param {KEY} key
+ * @return {VALUE}
+ * @throws If key is not present in map.
+ * @template KEY, VALUE
+ */
+function getMapValueOrThrow(mapView, key) {
+  const value = mapView.get(key);
+  if (value === undefined) {
+    throw new Error('Key \'' + key + '\' not present in map.');
+  }
+  return value;
+}
+
+/**
+ * @param {!MapView<KEY, VALUE>} mapView
+ * @param {KEY} key
+ * @param {VALUE} defaultValue
+ * @return {VALUE}
+ * @throws If key is not present in map.
+ * @template KEY, VALUE
+ */
+function getMapValueOrDefault(mapView, key, defaultValue) {
+  const value = mapView.get(key);
+  return value !== undefined ? value : defaultValue;
+}
+
+/**
+ * @param {!InternalMessage} message
+ * @return {!JspbKernel}
+ */
+function kernelProvider(message) {
+  return message.kernel_;
+}
+
+/**
+ * @const {!Object<number, !InternalMessage>}
+ */
+const DEFAULT_INSTANCES = {};
+
+exports = InternalMessage;
+

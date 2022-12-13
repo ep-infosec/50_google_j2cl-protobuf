@@ -1,0 +1,45 @@
+// Copyright 2020 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+syntax = "proto2";
+
+package j2cl;
+
+option java_package = "com.google.protos.j2cl";
+
+import "google/protobuf/descriptor.proto";
+
+extend google.protobuf.EnumOptions {
+  optional J2clEnumOptions enum_options = 13373;
+}
+
+extend google.protobuf.OneofOptions {
+  optional J2clOneofOptions oneof_options = 13374;
+}
+
+message J2clOneofOptions {
+  // Use a lightweight @JsEnum(hasCustomValue=true) representation where the
+  // underlying value is the enum protobuf number.
+  // Note that, such enums can be directly passed back and forth to JavaScript.
+  // On JavaScript side, the enum will be observed as the corresponding closure
+  // enum from the immutable_js_proto.
+  // See jsinterop.annotations.JsEnum for more details and limitations on
+  // native JsEnums.
+  optional bool generate_js_enum = 1;
+}
+
+message J2clEnumOptions {
+  // Use a lightweight @JsEnum(hasCustomValue=true) representation for the oneof
+  // case enum. See above for details.
+  optional bool generate_js_enum = 1;
+}

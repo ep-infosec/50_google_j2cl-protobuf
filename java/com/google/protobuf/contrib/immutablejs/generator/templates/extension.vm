@@ -1,0 +1,25 @@
+#foreach ($field in $extensions)
+#if ($field.isRepeated())
+#set ($extensionCreator = "proto_im_InternalMessage.ExtensionFieldInfo.createRepeated${field.stem}Extension")
+#else
+#set ($extensionCreator = "proto_im_InternalMessage.ExtensionFieldInfo.createSingle${field.stem}Extension")
+#end
+/** @const {!proto_im_Message.ExtensionFieldInfo<$field.jsDoc>}*/
+#if ($field.isMessage())
+${enclosingTypeName}.${field.name} = $extensionCreator(${field.number}, $field.type.expression);
+#else
+${enclosingTypeName}.${field.name} = $extensionCreator(${field.number});
+#end
+
+${field.createExtensionReference().expression}.internal__extensionDescriptorRegistry[${field.number}] =
+#if ($field.descriptorEncoder.canUseConciseEncoding())
+    '${field.descriptorEncoder.encodedDescriptor}';
+#else
+    proto_im_InternalDescriptor.createExtension(
+      ${field.number},
+      '${field.descriptorEncoder.encodedDescriptor}',
+      ${field.type.expression}.getDescriptor,
+    );
+#end
+
+#end

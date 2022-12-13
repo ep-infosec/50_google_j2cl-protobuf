@@ -1,0 +1,26 @@
+#if (${field.isRepeated()})
+  #set ($param = "index")
+  #set ($paramDec = "int index")
+  #set ($methodKind = "Repeated")
+#else
+  #set ($param = "${field.defaultValue}")
+  #set ($paramDec = "")
+  #set ($methodKind = "")
+#end
+
+#if (${field.isEnum()})
+public ${field.unboxedType} get${field.name}(${paramDec}){
+  return get${methodKind}FieldForEnum(${field.number}, ${param}, ${field.unrecognizedEnumValue});
+}
+
+#if (${field.hasEnumValueAccessors()})
+  public int get${field.name}Value(${paramDec}){
+    return get${methodKind}FieldForEnumValue(${field.number}, ${param});
+  }
+#end
+
+#else
+public ${field.unboxedType} get${field.name}(${paramDec}){
+  return get${methodKind}Field(${field.number}, ${param});
+}
+#end

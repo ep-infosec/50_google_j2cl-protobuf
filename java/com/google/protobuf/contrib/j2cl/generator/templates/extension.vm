@@ -1,0 +1,17 @@
+#foreach ($field in $extensions)
+  #set ($extensionMethod = "Single${field.stem()}")
+  #set ($extensionType = "${field.boxedType}")
+  #if ($field.isRepeated())
+    #set ($extensionMethod = "Repeated${field.stem()}")
+    #set ($extensionType = "java.util.List<${field.boxedType}>")
+  #end
+
+  ## Underlying field in immutable_js
+  @jsinterop.annotations.JsProperty(name = "$field.jsName")
+  private static com.google.protobuf.GeneratedMessageLite.Internal_.ExtensionFieldInfo<${field.extendedMessage}, ?> internal_${field.name};
+
+  ## Java api field
+  @jsinterop.annotations.JsOverlay
+  public static final com.google.protobuf.ExtensionLite<${field.extendedMessage}, ${extensionType}> $field.name =
+    com.google.protobuf.GeneratedMessageLite.Internal_.create${extensionMethod}Extension(internal_${field.name}#extensionConverterParams( $field ));
+#end
